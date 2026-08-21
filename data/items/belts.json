@@ -1035,8 +1035,8 @@
     "defenseMax": 68,
     "implicit": {
       "enhanced_defense": [
-        45,
-        75
+        445,
+        575
       ],
       "fire_skill_damage": [
         3,

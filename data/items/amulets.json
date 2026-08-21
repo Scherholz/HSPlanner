@@ -407,10 +407,7 @@
     "grade": "B",
     "requiresLevel": 38,
     "implicit": {
-      "faster_cast_rate": [
-        2,
-        4
-      ],
+      "faster_cast_rate": 20,
       "extra_damage_shadow_burning": [
         25,
         35
@@ -436,8 +433,8 @@
         15
       ],
       "life": [
-        35,
-        50
+        350,
+        500
       ],
       "increased_life": [
         1,
@@ -493,8 +490,8 @@
         15
       ],
       "mana": [
-        20,
-        30
+        250,
+        300
       ]
     }
   },
@@ -671,10 +668,7 @@
     "grade": "S",
     "requiresLevel": 85,
     "implicit": {
-      "all_attributes": [
-        2,
-        4
-      ],
+      "all_attributes": 25,
       "arcane_skill_damage": [
         4,
         8

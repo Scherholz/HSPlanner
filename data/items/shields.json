@@ -936,7 +936,10 @@
         12,
         26
       ],
-      "fire_skill_damage": 5,
+      "fire_skill_damage": [
+        25,
+        35
+      ],
       "mana_replenish_pct": 10,
       "mana": 25,
       "fire_resistance": 50
@@ -1135,7 +1138,10 @@
         70,
         85
       ],
-      "enhanced_defense": 5,
+      "enhanced_defense": [
+        240,
+        300
+      ],
       "all_attributes": [
         15,
         25
@@ -1170,8 +1176,8 @@
         30
       ],
       "enhanced_defense": [
-        3,
-        5
+        90,
+        130
       ],
       "damage_return": [
         400,
@@ -1799,8 +1805,8 @@
     "implicit": {
       "block_chance": 50,
       "enhanced_defense": [
-        3,
-        5
+        90,
+        130
       ],
       "all_skills": 2,
       "movement_speed": 20,

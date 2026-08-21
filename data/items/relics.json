@@ -1109,7 +1109,7 @@
     "slot": "relic_1",
     "rarity": "relic",
     "implicit": {
-      "life": 100,
+      "life": 600,
       "to_vitality": 20
     }
   },

@@ -1674,7 +1674,7 @@
         160
       ],
       "to_vitality": 10,
-      "life": 40,
+      "life": 350,
       "life_per_kill": 15
     },
     "setId": "juggernaut_s_rampart",
@@ -2988,7 +2988,7 @@
       "arcane_skills": 2,
       "to_energy": 15,
       "to_vitality": 5,
-      "mana": 30,
+      "mana": 500,
       "increased_mana": 2
     },
     "setId": "zealot_s_prophecy"

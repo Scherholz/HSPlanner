@@ -4983,8 +4983,8 @@
         355
       ],
       "life": [
-        40,
-        50
+        340,
+        450
       ],
       "fire_resistance": [
         25,
@@ -5109,7 +5109,10 @@
         2,
         5
       ],
-      "all_attributes": 2,
+      "all_attributes": [
+        15,
+        20
+      ],
       "magic_skill_damage": [
         5,
         10
@@ -10239,7 +10242,7 @@
         15
       ],
       "mana_replenish_pct": 15,
-      "mana": 35,
+      "mana": 500,
       "cooldown_recovery": [
         10,
         20
