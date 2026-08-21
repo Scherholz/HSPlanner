@@ -7,27 +7,27 @@ Branch: feat/guide-imports-data-fixes (fork Scherholz/HSPlanner).
 ### [HIGH] Tree conversions into life/mana erase the %increased multiplier
 - Where: `engine/src/calc/stats/mod.rs:372-396 (+ stats/finalize.rs:35-37, 188-223)`
 - What: Step 18 multiplies life/mana (flat x (1+increased) x (1+more)) into `stats`; step 20 pushes conversion sources ("X% of Defense converted to Life", life/mana nodes 1534/1548/1876/1912/2354); step 21 re-sums those keys from flat sources only. Any build with such a node loses all %increased life/mana on the displayed life and EHP.
-- Fix: Apply conversions before the multiplier pass (from a pre-multiplier snapshot) or re-run the multiplier pass on touched keys after step 21. (verified by reading)
+- Fix: Apply conversions before the multiplier pass (from a pre-multiplier snapshot) or re-run the multiplier pass on touched keys after step 21. (FIXED in branch (3289deb) — )
 
 ### [HIGH] Conversions targeting increased_life never move life
 - Where: `engine/src/calc/tree/parse/conversion.rs:98-127`
 - What: Nodes 2972-2980 ("X% of Attack Damage -> Increased Life") and 1740 push into `increased_life` after life was already multiplied; the stat row changes, life does not.
-- Fix: Same fix as above. (same root cause)
+- Fix: Same fix as above. (FIXED in branch (3289deb) — )
 
 ### [HIGH] Dual wield sums both weapons' attacks_per_second
 - Where: `engine/src/calc/stats/inventory.rs:71-93 -> skills/attack.rs:167, weapon.rs:131, build.rs:387`
 - What: Every implicit of every slot is applied, offhand included; 89 one-handers and 50 two-handers carry `implicit.attacks_per_second`. Two wands (Master of Wands) or two 2H (Hercules Grip) -> base APS 3.5 before IAS. Offhand enhanced_damage / physical_skills / melee_range also join the shared pool (rule uncertain).
-- Fix: Skip (or max) `attacks_per_second` from the offhand slot; decide an explicit policy for offhand damage implicits. (verified by reading)
+- Fix: Skip (or max) `attacks_per_second` from the offhand slot; decide an explicit policy for offhand damage implicits. (FIXED in branch (3289deb) — )
 
 ### [MED-HIGH] Attack-skill path ignores tag rank bonuses
 - Where: `engine/src/calc/skills/attack.rs:51-64 vs rank.rs:21-42`
 - What: `eff_rank` uses all_skills + element + item bonuses but not projectile/sentry/explosion tag skills; the UI rank (rankBonuses) and the spell path do include them.
-- Fix: Use `rank::effective_rank_range_for` in attack.rs. (agent)
+- Fix: Use `rank::effective_rank_range_for` in attack.rs. (FIXED in branch (3289deb) — )
 
 ### [MED-HIGH] Item-granted passive attribute stats applied after attributes are totalled
 - Where: `engine/src/calc/stats/mod.rs:348-360`
 - What: Flexing etc. push to_strength/to_vitality into attr_sources after `attributes` is computed, so they never reach str->ED / vit->life conversions.
-- Fix: Move step 15 before steps 9-13, or re-sum attributes and derived stats after it. (agent)
+- Fix: Move step 15 before steps 9-13, or re-sum attributes and derived stats after it. (FIXED in branch (3289deb) — )
 
 ### [MED] enhanced_defense is item-only; every non-implicit ED source is dropped
 - Where: `engine/src/calc/stats/helpers.rs:74-79, inventory.rs:38-69`
@@ -57,17 +57,17 @@ Branch: feat/guide-imports-data-fixes (fork Scherholz/HSPlanner).
 ### [MED-LOW] flat_elemental_skill_damage applied to physical skills
 - Where: `engine/src/calc/skills/damage.rs:281-285`
 - What: 65 physical skills receive elemental flat damage.
-- Fix: Gate on ELEMENTS.contains(damage type). (agent)
+- Fix: Gate on ELEMENTS.contains(damage type). (FIXED in branch (3289deb) — )
 
 ### [MED-LOW] Passive-skill ranks use a mid-pipeline snapshot of all_skills
 - Where: `engine/src/calc/stats/skills.rs:50-88`
 - What: Item-granted passives (Roll the Dice +7 all skills...) raise active damage ranks but not passive ranks.
-- Fix: Compute passive ranks after step 15 or re-run. (agent)
+- Fix: Compute passive ranks after step 15 or re-run. (FIXED in branch (3289deb) — )
 
 ### [LOW-MED] Star scaling of skillBonuses ignores S10 charms
 - Where: `engine/src/calc/rank.rs:75-79 vs inventory.rs:26-27`
 - What: Implicits use can_star_forge(slot, season); skillBonuses use is_gear_slot - 30 charms with skillBonuses scale in one place and not the other in S10.
-- Fix: Use the same season-aware predicate. (agent)
+- Fix: Use the same season-aware predicate. (FIXED in branch (3289deb) — )
 
 ### [LOW] Percent weapon-fold stats are floored
 - Where: `engine/src/calc/stats/helpers.rs:50-59 (mod.rs:276)`
