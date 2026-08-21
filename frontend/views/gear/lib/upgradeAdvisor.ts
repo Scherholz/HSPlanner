@@ -6,7 +6,7 @@ import type { BuildPerformanceDeps } from '../../../utils/build/buildPerformance
 import type { PickerRow } from '../PickerModal'
 import type { ItemBase, SlotDef, SlotKey } from '../../../types'
 
-export type UpgradeKind = 'slot' | 'two_handed' | 'one_hand_shield'
+export type UpgradeKind = 'slot' | 'two_handed' | 'one_hand_shield' | 'dual_wield'
 
 /** One inventory edit the suggestion applies; `baseId: null` unequips the slot. */
 export interface UpgradeChange {
@@ -21,7 +21,7 @@ export interface UpgradeSuggestion {
   currentBaseName: string
   bestBaseId: string
   bestBaseName: string
-  /** one_hand_shield only: the offhand paired with the one-hander. */
+  /** one_hand_shield / dual_wield: the offhand paired with the one-hander. */
   offhandBaseName?: string
   gainPct: number
   currentScore: number
@@ -166,7 +166,7 @@ async function evaluateWeapon(
     })
   }
 
-  // --- One-hand + shield option ---
+  // --- One-hand + shield (and, when it wins, dual wield) options ---
   const bestOne = bestOf(scores, oneHand)
   if (bestOne && offhandSlot) {
     const oneBase = getItem(bestOne.id)
@@ -175,39 +175,57 @@ async function evaluateWeapon(
     const offhandIds = [
       ...new Set([...offhandRows.map((r) => r.id), ...(offhand ? [offhand.baseId] : [])]),
     ]
-    let pairScore = bestOne.score
-    let bestOffhandId: string | null = offhand?.baseId ?? null
+    let offhandScores: Scores = {}
     if (offhandIds.length > 0) {
       const withOne: BuildPerformanceDeps = {
         ...deps,
         inventory: withBare(deps.inventory, slot.key, bestOne.id),
       }
-      const offhandScores = await rankSlotItemsNative(withOne, 'offhand', offhandIds)
-      const bestOffhand = bestOf(offhandScores, offhandIds)
-      if (bestOffhand) {
-        pairScore = bestOffhand.score
-        bestOffhandId = bestOffhand.id
-      }
+      offhandScores = await rankSlotItemsNative(withOne, 'offhand', offhandIds)
     }
-    const sameWeapon = bestOne.id === currentBaseId
-    const sameOffhand = bestOffhandId === (offhand?.baseId ?? null)
-    if (!(sameWeapon && sameOffhand)) {
+    const isShield = (id: string) => getItem(id)?.baseType === 'Shield'
+    const shieldIds = offhandIds.filter(isShield)
+    const bestShield = bestOf(offhandScores, shieldIds)
+    const bestAny = bestOf(offhandScores, offhandIds)
+    const currentOffhandId = offhand?.baseId ?? null
+
+    const pairOption = (
+      kind: UpgradeKind,
+      offhandPick: { id: string; score: number } | null,
+    ): UpgradeSuggestion | null => {
+      const offhandId = offhandPick?.id ?? currentOffhandId
+      const pairScore = offhandPick?.score ?? bestOne.score
+      const sameWeapon = bestOne.id === currentBaseId
+      const sameOffhand = offhandId === currentOffhandId
+      if (sameWeapon && sameOffhand) return null
       const changes: UpgradeChange[] = []
       if (!sameWeapon) changes.push({ slot: slot.key, baseId: bestOne.id })
-      if (!sameOffhand) changes.push({ slot: 'offhand', baseId: bestOffhandId })
-      out.push({
+      if (!sameOffhand) changes.push({ slot: 'offhand', baseId: offhandId })
+      return {
         slot: slot.key,
         slotName: slot.name,
-        kind: 'one_hand_shield',
+        kind,
         currentBaseName: nameOf(rows, currentBaseId),
         bestBaseId: bestOne.id,
         bestBaseName: nameOf(rows, bestOne.id),
-        offhandBaseName: bestOffhandId ? nameOf(offhandRows, bestOffhandId) : undefined,
+        offhandBaseName: offhandId ? nameOf(offhandRows, offhandId) : undefined,
         gainPct: gainOf(currentScore, pairScore),
         currentScore,
         bestScore: pairScore,
         changes,
-      })
+      }
+    }
+
+    // Shield pairing is always offered (the user asked for it explicitly); a
+    // dual-wield pairing is added only when a weapon offhand clearly beats it.
+    const shieldOption = pairOption('one_hand_shield', bestShield ?? (bestAny && isShield(bestAny.id) ? bestAny : null))
+    if (shieldOption) out.push(shieldOption)
+    if (bestAny && !isShield(bestAny.id)) {
+      const shieldScore = bestShield?.score ?? 0
+      if (bestAny.score > shieldScore * (1 + UPGRADE_MIN_GAIN_PCT / 100)) {
+        const dual = pairOption('dual_wield', bestAny)
+        if (dual) out.push(dual)
+      }
     }
   }
 

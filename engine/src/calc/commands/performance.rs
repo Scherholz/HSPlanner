@@ -118,22 +118,32 @@ pub fn rank_slot_items(input: RankSlotItemsInput) -> HashMap<String, f64> {
             },
         );
         let dps = if input.active_skill_ids.len() > 1 {
-            let mut sum: Option<(f64, f64)> = None;
+            // Mirrors the frontend's mergeCombinedPerformance: every skill's
+            // avg-hit and ailment DPS scaled by its own execute multiplier,
+            // plus the shared proc DPS once, scaled by the primary's multiplier.
+            let mut sum = (0.0, 0.0);
+            let mut any = false;
             let mut proc = (0.0, 0.0);
             for (i, sid) in input.active_skill_ids.iter().enumerate() {
                 let p =
                     compute_build_performance(&perf_deps(&input.perf, &inventory, Some(sid)));
+                let exec = p.execute_mult;
                 if let (Some(a), Some(b)) = (p.avg_hit_dps_min, p.avg_hit_dps_max) {
-                    let s = sum.unwrap_or((0.0, 0.0));
-                    sum = Some((s.0 + a, s.1 + b));
+                    sum = (sum.0 + a * exec, sum.1 + b * exec);
+                    any = true;
+                }
+                if let (Some(a), Some(b)) = (p.ailment_dps_min, p.ailment_dps_max) {
+                    sum = (sum.0 + a * exec, sum.1 + b * exec);
+                    any = true;
                 }
                 if i == 0 {
-                    proc = (p.proc_dps_min, p.proc_dps_max);
+                    proc = (p.proc_dps_min * exec, p.proc_dps_max * exec);
                 }
             }
-            match sum {
-                Some((a, b)) => (a + proc.0 + b + proc.1) / 2.0,
-                None => (proc.0 + proc.1) / 2.0,
+            if any || proc.0 > 0.0 || proc.1 > 0.0 {
+                (sum.0 + proc.0 + sum.1 + proc.1) / 2.0
+            } else {
+                0.0
             }
         } else {
             let main = input

@@ -69,6 +69,7 @@ const ITEMS: Record<string, Partial<ItemBase>> = {
   axe_2h: { id: 'axe_2h', name: 'Great Axe', slot: 'weapon', baseType: 'Axe', twoHanded: true },
   shield_a: { id: 'shield_a', name: 'Buckler', slot: 'offhand', baseType: 'Shield' },
   shield_b: { id: 'shield_b', name: 'Tower Shield', slot: 'offhand', baseType: 'Shield' },
+  dagger_off: { id: 'dagger_off', name: 'Offhand Dagger', slot: 'weapon', baseType: 'Dagger', twoHanded: false },
 }
 function useItemDb() {
   mockGetItem.mockImplementation((id: string) => ITEMS[id] as ItemBase | undefined)
@@ -83,6 +84,7 @@ function useItemDb() {
         ? [
             { id: 'shield_a', name: 'Buckler' },
             { id: 'shield_b', name: 'Tower Shield' },
+            { id: 'dagger_off', name: 'Offhand Dagger' },
           ]
         : [
             { id: 'base_a', name: 'Base A' },
@@ -369,6 +371,32 @@ describe('scanForUpgrades', () => {
       })
       expect(one?.gainPct).toBeCloseTo(25)
       expect(out.upgrades.find((s) => s.kind === 'two_handed')).toBeUndefined()
+    })
+
+    it('adds a dual-wield option only when a weapon offhand clearly beats the best shield', async () => {
+      mockRank.mockImplementation(async (deps, slot) => {
+        if (slot === 'weapon' && !deps.inventory.offhand) return { axe_2h: 90 }
+        if (slot === 'weapon') return { sword_1h: 100, sword_1h_best: 130 }
+        if (slot === 'offhand' && deps.inventory.weapon?.baseId === 'sword_1h_best')
+          return { shield_a: 140, shield_b: 150, dagger_off: 190 }
+        return { shield_a: 100, shield_b: 90, dagger_off: 95 }
+      })
+      const out = await scanForUpgrades(
+        makeDeps({ inventory: inv({ weapon: 'sword_1h', offhand: 'shield_a' }) }),
+      )
+      const shield = out.upgrades.find((s) => s.kind === 'one_hand_shield')
+      const dual = out.upgrades.find((s) => s.kind === 'dual_wield')
+      expect(shield).toMatchObject({ bestBaseId: 'sword_1h_best', offhandBaseName: 'Tower Shield' })
+      expect(shield?.gainPct).toBeCloseTo(50)
+      expect(dual).toMatchObject({
+        bestBaseId: 'sword_1h_best',
+        offhandBaseName: 'Offhand Dagger',
+        changes: [
+          { slot: 'weapon', baseId: 'sword_1h_best' },
+          { slot: 'offhand', baseId: 'dagger_off' },
+        ],
+      })
+      expect(dual?.gainPct).toBeCloseTo(90)
     })
 
     it('weapon options are not counted against the 5-row cap', async () => {

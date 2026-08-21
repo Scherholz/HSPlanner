@@ -39,6 +39,7 @@ function formatEmptySlotNames(
 function suggestionLabel(s: UpgradeSuggestion): string {
   if (s.kind === 'two_handed') return `${s.slotName} · 2H`
   if (s.kind === 'one_hand_shield') return `${s.slotName} · 1H + shield`
+  if (s.kind === 'dual_wield') return `${s.slotName} · dual wield`
   return s.slotName
 }
 

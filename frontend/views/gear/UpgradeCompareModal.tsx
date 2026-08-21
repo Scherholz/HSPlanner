@@ -25,6 +25,7 @@ const KIND_LABEL: Record<UpgradeSuggestion['kind'], string> = {
   slot: 'Base upgrade',
   two_handed: 'Two-handed option',
   one_hand_shield: 'One-hand + shield option',
+  dual_wield: 'Dual-wield option',
 }
 
 function SideCards({
