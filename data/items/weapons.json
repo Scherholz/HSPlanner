@@ -10412,5 +10412,37 @@
     ],
     "sockets": 6,
     "maxSockets": 6
+  },
+  {
+    "id": "throwing_satanic_crystal_infused_javelin",
+    "name": "Crystal Infused Javelin",
+    "baseType": "Throwing",
+    "slot": "weapon",
+    "rarity": "satanic",
+    "grade": "D",
+    "requiresLevel": 11,
+    "damageMin": 8,
+    "damageMax": 12,
+    "attackSpeed": 1.75,
+    "implicit": {
+      "enhanced_damage": [
+        210,
+        345
+      ],
+      "all_skills": 1,
+      "increased_attack_speed": [
+        15,
+        30
+      ],
+      "attack_rating": [
+        60,
+        80
+      ],
+      "life_steal": 6,
+      "all_attributes": 5,
+      "all_resistances": 15
+    },
+    "sockets": 0,
+    "maxSockets": 2
   }
 ]

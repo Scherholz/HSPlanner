@@ -394,5 +394,32 @@
         5
       ]
     }
+  },
+  {
+    "id": "potion_common_colossal_healing_potion",
+    "name": "Colossal Healing Potion",
+    "baseType": "Potion",
+    "slot": "potion_1",
+    "rarity": "common",
+    "requiresLevel": 1,
+    "description": "Restores a large amount of life when used. No passive stats."
+  },
+  {
+    "id": "potion_common_colossal_mana_potion",
+    "name": "Colossal Mana Potion",
+    "baseType": "Potion",
+    "slot": "potion_1",
+    "rarity": "common",
+    "requiresLevel": 1,
+    "description": "Restores mana when used. No passive stats."
+  },
+  {
+    "id": "potion_common_superior_healing_potion",
+    "name": "Superior Healing Potion",
+    "baseType": "Potion",
+    "slot": "potion_1",
+    "rarity": "common",
+    "requiresLevel": 1,
+    "description": "Restores life when used. No passive stats."
   }
 ]

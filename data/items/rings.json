@@ -1600,5 +1600,19 @@
     "skillBonuses": {
       "Freezing Touch": 1
     }
+  },
+  {
+    "id": "ring_normal_ring",
+    "name": "Ring",
+    "baseType": "Ring",
+    "slot": "ring_1",
+    "rarity": "common",
+    "requiresLevel": 1,
+    "implicit": {
+      "all_attributes": [
+        1,
+        2
+      ]
+    }
   }
 ]

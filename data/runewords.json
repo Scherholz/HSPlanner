@@ -2493,5 +2493,29 @@
     },
     "requiresLevel": 100,
     "requiresItemLevel": 1
+  },
+  {
+    "id": "rw_ent_s_blessing",
+    "name": "Ent's Blessing",
+    "runes": [
+      "rune_io",
+      "rune_pul"
+    ],
+    "allowedBaseTypes": [
+      "Armor"
+    ],
+    "stats": {
+      "defense": 230,
+      "enhanced_defense": 576,
+      "all_skills": 1,
+      "mana_cost_reduction": 3,
+      "to_vitality": 30,
+      "life": 300,
+      "faster_hit_recovery": 50,
+      "life_per_kill": 10,
+      "damage_recouped_as_life": 10
+    },
+    "requiresLevel": 85,
+    "requiresItemLevel": 1
   }
 ]

@@ -535,7 +535,7 @@ export default function BuildSelect({
         onCopy={handleCopy}
       />
 
-      <main className="grid min-h-0 grid-cols-[240px_1fr_360px] border-t border-border">
+      <main className="grid min-h-0 min-w-0 grid-cols-[240px_minmax(640px,1fr)_360px] overflow-x-auto border-t border-border">
         <FolderTree
           childFolders={lib.childFolders}
           scope={scope}

@@ -2132,5 +2132,55 @@
     },
     "sockets": 0,
     "maxSockets": 4
+  },
+  {
+    "id": "shield_heroic_gabriel_s_unholy_oath",
+    "name": "Gabriel's Unholy Oath",
+    "baseType": "Shield",
+    "slot": "offhand",
+    "rarity": "heroic",
+    "grade": "SS",
+    "requiresLevel": 100,
+    "defenseMin": 480,
+    "defenseMax": 550,
+    "implicit": {
+      "block_chance": 75,
+      "enhanced_defense": [
+        450,
+        550
+      ],
+      "summon_skills": [
+        1,
+        2
+      ],
+      "all_skills": [
+        2,
+        3
+      ],
+      "summon_max_amount": 1,
+      "summon_damage": [
+        20,
+        40
+      ],
+      "to_energy": [
+        20,
+        40
+      ],
+      "to_intelligence": 25,
+      "faster_hit_recovery": 50,
+      "life_based_on_level": [
+        300,
+        500
+      ],
+      "all_resistances": [
+        30,
+        40
+      ]
+    },
+    "skillBonuses": {
+      "Summon Heretic": 1
+    },
+    "sockets": 4,
+    "maxSockets": 6
   }
 ]
