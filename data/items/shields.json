@@ -936,10 +936,7 @@
         12,
         26
       ],
-      "fire_skill_damage": [
-        25,
-        35
-      ],
+      "fire_skill_damage": 5,
       "mana_replenish_pct": 10,
       "mana": 25,
       "fire_resistance": 50

@@ -105,7 +105,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     section: 'gear',
     target: 'gear-upgrades',
     title: 'Upgrade Advisor',
-    body: 'Compares your item bases against the best base for each slot using engine DPS. Weapons get two options — best two-hander vs best one-hander + shield — and every row opens a side-by-side compare with a Switch button.',
+    body: 'Compares your item bases against the best base for each slot using engine DPS. Weapons get two options — best two-hander vs best one-hander + shield (plus dual wield when it wins) — and every upgrade row opens a side-by-side compare with a Switch button.',
   },
   {
     section: 'merc',

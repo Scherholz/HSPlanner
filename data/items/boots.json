@@ -2074,8 +2074,8 @@
     "defenseMax": 48,
     "implicit": {
       "enhanced_defense": [
-        350,
-        480
+        50,
+        80
       ],
       "movement_speed": [
         20,

@@ -2988,7 +2988,7 @@
       "arcane_skills": 2,
       "to_energy": 15,
       "to_vitality": 5,
-      "mana": 500,
+      "mana": 30,
       "increased_mana": 2
     },
     "setId": "zealot_s_prophecy"

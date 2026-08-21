@@ -19,7 +19,7 @@ import {
   type StatDiff,
 } from './lib/diff'
 import type { UpgradeChange, UpgradeSuggestion } from './lib/upgradeAdvisor'
-import { affectedSlots, applyBareChanges } from './lib/upgradeCompare'
+import { compareInventories, displaySlots, pickerSlotFor } from './lib/upgradeCompare'
 
 const KIND_LABEL: Record<UpgradeSuggestion['kind'], string> = {
   slot: 'Base upgrade',
@@ -32,12 +32,10 @@ function SideCards({
   title,
   inventory,
   slots,
-  tone,
 }: {
   title: string
   inventory: Inventory
   slots: SlotKey[]
-  tone: 'before' | 'after'
 }) {
   return (
     <div className="min-w-0 flex-1">
@@ -59,15 +57,7 @@ function SideCards({
               </div>
             )
           }
-          return (
-            <ItemCard
-              key={slot}
-              equipped={eq}
-              base={base}
-              state={tone === 'after' ? 'selected' : 'equipped'}
-              className="w-full text-[12px]"
-            />
-          )
+          return <ItemCard key={slot} equipped={eq} base={base} className="w-full text-[12px]" />
         })}
       </div>
     </div>
@@ -89,23 +79,13 @@ export function UpgradeCompareModal({
   onPickSlot,
   onClose,
 }: UpgradeCompareModalProps) {
-  const slots = useMemo(() => affectedSlots(suggestion), [suggestion])
+  const slots = useMemo(() => displaySlots(suggestion), [suggestion])
 
-  // Before = the current bases, bare (same footing as the scan's gain%);
-  // after = the suggestion applied on top of that.
-  const beforeInventory = useMemo(
-    () =>
-      applyBareChanges(
-        deps.inventory,
-        slots
-          .filter((s) => deps.inventory[s])
-          .map((s) => ({ slot: s, baseId: deps.inventory[s]!.baseId })),
-      ),
-    [deps.inventory, slots],
-  )
-  const afterInventory = useMemo(
-    () => applyBareChanges(beforeInventory, suggestion.changes),
-    [beforeInventory, suggestion.changes],
+  // Same footing as the scan's gain%: only the changed slots are bared on the
+  // before side; untouched slots (e.g. a kept offhand) stay as equipped on both.
+  const { before: beforeInventory, after: afterInventory } = useMemo(
+    () => compareInventories(deps.inventory, suggestion),
+    [deps.inventory, suggestion],
   )
   const summaryDeps = useMemo(() => {
     const { inventory: _drop, ...rest } = deps
@@ -155,15 +135,15 @@ export function UpgradeCompareModal({
           ) : null}
         </span>
       }
-      subtitle={`Engine DPS on bare bases: ${gainLabel} · affixes, sockets and stars are not carried over — move them afterwards.`}
+      subtitle={`Engine DPS, changed slots as bare bases: ${gainLabel} · affixes, sockets and stars are not carried over — move them afterwards.`}
       headerActions={verdict ? <VerdictBadge verdict={verdict} /> : null}
       dataTour="gear-upgrade-compare"
     >
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
         {summaries && <CompareSummary before={summaries.before} after={summaries.after} />}
         <div className="mt-4 flex items-start gap-4">
-          <SideCards title="Current" inventory={beforeInventory} slots={slots} tone="before" />
-          <SideCards title="Recommended" inventory={afterInventory} slots={slots} tone="after" />
+          <SideCards title="Current" inventory={beforeInventory} slots={slots} />
+          <SideCards title="Recommended" inventory={afterInventory} slots={slots} />
         </div>
         {!summaries && (
           <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.18em] text-faint">
@@ -189,7 +169,7 @@ export function UpgradeCompareModal({
       <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-border px-6 py-3">
         <button
           type="button"
-          onClick={() => onPickSlot(suggestion.slot)}
+          onClick={() => onPickSlot(pickerSlotFor(suggestion))}
           className="rounded-[3px] border border-border-2 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted hover:text-text"
         >
           Open slot picker

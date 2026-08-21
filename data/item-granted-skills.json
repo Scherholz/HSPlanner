@@ -2061,5 +2061,10 @@
       }
     ],
     "procCooldown": 0.25
+  },
+  {
+    "id": "summon_heretic",
+    "name": "Summon Heretic",
+    "description": "Summons a heretic to fight by your side. Granted by Gabriel's Unholy Oath; the summon's own stats are not modelled yet."
   }
 ]

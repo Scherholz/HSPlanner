@@ -1271,8 +1271,8 @@
     "defenseMax": 24,
     "implicit": {
       "enhanced_defense": [
-        330,
-        440
+        30,
+        40
       ],
       "all_skills": [
         1,

@@ -113,42 +113,44 @@ async function evaluateWeapon(
   const offhand = deps.inventory.offhand
   const offhandBase = offhand ? getItem(offhand.baseId) : undefined
   const offhandSlot = gameConfig.slots.find((s) => s.key === 'offhand')
+  const tree = deps.allocatedTreeNodes
 
+  // Can the current offhand stay next to this weapon base? (mirrors withValidOffhand)
+  const keepsOffhand = (base: ItemBase | undefined): boolean =>
+    !!offhandBase && !!base && canOffhand(offhandBase, base, tree)
+
+  // Candidates are ranked with the current offhand kept (keep group) or removed
+  // (drop group) exactly as the store would leave it after equipping them.
   const oneHand: string[] = []
-  const twoHandKeep: string[] = []
-  const twoHandDrop: string[] = []
+  const twoHand: string[] = []
+  const keepIds: string[] = []
+  const dropIds: string[] = []
   for (const row of rows) {
     const base = getItem(row.id)
-    if (!base?.twoHanded) {
-      oneHand.push(row.id)
-      continue
-    }
-    if (offhandBase && canOffhand(offhandBase, base, deps.allocatedTreeNodes)) twoHandKeep.push(row.id)
-    else twoHandDrop.push(row.id)
+    ;(base?.twoHanded ? twoHand : oneHand).push(row.id)
+    ;(offhand === undefined || keepsOffhand(base) ? keepIds : dropIds).push(row.id)
   }
-
-  // Baseline: the current weapon base, bare, in the current inventory.
-  const currentIsTwoHanded = !!currentBase?.twoHanded
-  const keepIds = [...new Set([...oneHand, ...twoHandKeep, ...(currentIsTwoHanded ? [] : [currentBaseId])])]
-  const dropIds = [...new Set([...twoHandDrop, ...(currentIsTwoHanded ? [currentBaseId] : [])])]
+  const currentKeeps = offhand === undefined || keepsOffhand(currentBase)
+  ;(currentKeeps ? keepIds : dropIds).push(currentBaseId)
+  const uniq = (ids: string[]) => [...new Set(ids)]
   const depsNoOffhand: BuildPerformanceDeps = offhand
     ? { ...deps, inventory: withBare(deps.inventory, 'offhand', null) }
     : deps
-  const keepScores = keepIds.length > 0 ? await rankSlotItemsNative(deps, slot.key, keepIds) : {}
-  const dropScores = dropIds.length > 0 ? await rankSlotItemsNative(depsNoOffhand, slot.key, dropIds) : {}
+  const keep = uniq(keepIds)
+  const drop = uniq(dropIds)
+  const keepScores = keep.length > 0 ? await rankSlotItemsNative(deps, slot.key, keep) : {}
+  const dropScores = drop.length > 0 ? await rankSlotItemsNative(depsNoOffhand, slot.key, drop) : {}
   const scores: Scores = { ...dropScores, ...keepScores }
-  // The current base sits in exactly one group; take it from there.
-  const currentScore = currentIsTwoHanded && offhand === undefined
-    ? (dropScores[currentBaseId] ?? keepScores[currentBaseId] ?? 0)
-    : (keepScores[currentBaseId] ?? dropScores[currentBaseId] ?? 0)
+  // Baseline: bare current weapon, everything else as equipped.
+  const currentScore = (currentKeeps ? keepScores : dropScores)[currentBaseId] ?? 0
   if (currentScore <= 0) return []
 
   const out: UpgradeSuggestion[] = []
 
   // --- Two-handed option ---
-  const bestTwo = bestOf(scores, [...twoHandKeep, ...twoHandDrop])
+  const bestTwo = bestOf(scores, twoHand)
   if (bestTwo && bestTwo.id !== currentBaseId) {
-    const dropsOffhand = offhand !== undefined && twoHandDrop.includes(bestTwo.id)
+    const dropsOffhand = offhand !== undefined && drop.includes(bestTwo.id)
     out.push({
       slot: slot.key,
       slotName: slot.name,
@@ -168,39 +170,57 @@ async function evaluateWeapon(
 
   // --- One-hand + shield (and, when it wins, dual wield) options ---
   const bestOne = bestOf(scores, oneHand)
-  if (bestOne && offhandSlot) {
+  if (bestOne && bestOne.id !== currentBaseId && offhandSlot) {
     const oneBase = getItem(bestOne.id)
-    const accepts = (i: ItemBase) => canOffhand(i, oneBase, deps.allocatedTreeNodes)
+    const accepts = (i: ItemBase) => canOffhand(i, oneBase, tree)
     const offhandRows = pickerItemsForSlot('offhand', oneBase ? accepts : undefined)
-    const offhandIds = [
-      ...new Set([...offhandRows.map((r) => r.id), ...(offhand ? [offhand.baseId] : [])]),
-    ]
-    let offhandScores: Scores = {}
-    if (offhandIds.length > 0) {
-      const withOne: BuildPerformanceDeps = {
-        ...deps,
-        inventory: withBare(deps.inventory, slot.key, bestOne.id),
-      }
-      offhandScores = await rankSlotItemsNative(withOne, 'offhand', offhandIds)
-    }
-    const isShield = (id: string) => getItem(id)?.baseType === 'Shield'
-    const shieldIds = offhandIds.filter(isShield)
-    const bestShield = bestOf(offhandScores, shieldIds)
-    const bestAny = bestOf(offhandScores, offhandIds)
     const currentOffhandId = offhand?.baseId ?? null
+    const currentOffhandFits = !!offhandBase && accepts(offhandBase)
+    const offhandIds = uniq([
+      ...offhandRows.map((r) => r.id),
+      ...(currentOffhandFits && currentOffhandId ? [currentOffhandId] : []),
+    ])
+    // Candidates are compared on one footing: bare best one-hander + bare offhand.
+    const withOne: BuildPerformanceDeps = { ...deps, inventory: withBare(deps.inventory, slot.key, bestOne.id) }
+    const offhandScores: Scores = offhandIds.length > 0 ? await rankSlotItemsNative(withOne, 'offhand', offhandIds) : {}
+    const isShield = (id: string) => getItem(id)?.baseType === 'Shield'
+    const bestShield = bestOf(offhandScores, offhandIds.filter(isShield))
+    const bestAny = bestOf(offhandScores, offhandIds)
 
-    const pairOption = (
+    // The gain for "new weapon + new offhand" needs a baseline with both slots
+    // bare; "new weapon, keep the offhand" is already scored in keepScores.
+    let bareBaseline: number | null = null
+    const baselineForPair = async (): Promise<number> => {
+      if (!currentOffhandId) return currentScore
+      if (bareBaseline === null) {
+        const withCurrent: BuildPerformanceDeps = { ...deps, inventory: withBare(deps.inventory, slot.key, currentBaseId) }
+        const r = await rankSlotItemsNative(withCurrent, 'offhand', [currentOffhandId])
+        bareBaseline = r[currentOffhandId] ?? 0
+      }
+      return bareBaseline
+    }
+
+    const pairOption = async (
       kind: UpgradeKind,
       offhandPick: { id: string; score: number } | null,
-    ): UpgradeSuggestion | null => {
-      const offhandId = offhandPick?.id ?? currentOffhandId
-      const pairScore = offhandPick?.score ?? bestOne.score
-      const sameWeapon = bestOne.id === currentBaseId
-      const sameOffhand = offhandId === currentOffhandId
-      if (sameWeapon && sameOffhand) return null
-      const changes: UpgradeChange[] = []
-      if (!sameWeapon) changes.push({ slot: slot.key, baseId: bestOne.id })
-      if (!sameOffhand) changes.push({ slot: 'offhand', baseId: offhandId })
+    ): Promise<UpgradeSuggestion | null> => {
+      const changes: UpgradeChange[] = [{ slot: slot.key, baseId: bestOne.id }]
+      let pairScore: number
+      let baseline: number
+      let offhandId: string | null
+      if (!offhandPick || offhandPick.id === currentOffhandId) {
+        // Keep the equipped offhand: the "new one-hander with current offhand" score.
+        offhandId = currentOffhandFits ? currentOffhandId : null
+        pairScore = currentOffhandFits ? (keepScores[bestOne.id] ?? 0) : (dropScores[bestOne.id] ?? 0)
+        baseline = currentScore
+        if (!currentOffhandFits && currentOffhandId) changes.push({ slot: 'offhand', baseId: null })
+      } else {
+        offhandId = offhandPick.id
+        pairScore = offhandPick.score
+        baseline = await baselineForPair()
+        changes.push({ slot: 'offhand', baseId: offhandId })
+      }
+      if (pairScore <= 0 || baseline <= 0) return null
       return {
         slot: slot.key,
         slotName: slot.name,
@@ -209,27 +229,28 @@ async function evaluateWeapon(
         bestBaseId: bestOne.id,
         bestBaseName: nameOf(rows, bestOne.id),
         offhandBaseName: offhandId ? nameOf(offhandRows, offhandId) : undefined,
-        gainPct: gainOf(currentScore, pairScore),
-        currentScore,
+        gainPct: gainOf(baseline, pairScore),
+        currentScore: baseline,
         bestScore: pairScore,
         changes,
       }
     }
 
-    // Shield pairing is always offered (the user asked for it explicitly); a
-    // dual-wield pairing is added only when a weapon offhand clearly beats it.
-    const shieldOption = pairOption('one_hand_shield', bestShield ?? (bestAny && isShield(bestAny.id) ? bestAny : null))
+    // Shield pairing is always offered; a dual-wield pairing only when a weapon
+    // offhand clearly beats the best shield on the same footing.
+    const shieldPick = bestShield ?? (bestAny && isShield(bestAny.id) ? bestAny : null)
+    const shieldOption = await pairOption('one_hand_shield', shieldPick)
     if (shieldOption) out.push(shieldOption)
     if (bestAny && !isShield(bestAny.id)) {
       const shieldScore = bestShield?.score ?? 0
       if (bestAny.score > shieldScore * (1 + UPGRADE_MIN_GAIN_PCT / 100)) {
-        const dual = pairOption('dual_wield', bestAny)
+        const dual = await pairOption('dual_wield', bestAny)
         if (dual) out.push(dual)
       }
     }
   }
 
-  // Keep both options only when at least one of them is a real upgrade.
+  // Keep the weapon options only when at least one of them is a real upgrade.
   return out.some((s) => s.gainPct > UPGRADE_MIN_GAIN_PCT) ? out : []
 }
 

@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { UpgradeCompareModal } from './UpgradeCompareModal'
-import { affectedSlots, applyBareChanges } from './lib/upgradeCompare'
+import { applyBareChanges, changedSlots, compareInventories, displaySlots, pickerSlotFor } from './lib/upgradeCompare'
 import { computeBuildSummary, type BuildSummary } from './lib/diff'
 import type { BuildPerformanceDeps } from '../../utils/build/buildPerformance'
 import type { Inventory } from '../../types'
@@ -100,10 +100,25 @@ describe('applyBareChanges / affectedSlots', () => {
   })
 
   it('lists weapon then offhand for weapon-family suggestions', () => {
-    expect(affectedSlots(TWO_HANDED)).toEqual(['weapon', 'offhand'])
-    expect(
-      affectedSlots({ ...TWO_HANDED, kind: 'slot', slot: 'ring_1', changes: [{ slot: 'ring_1', baseId: 'x' }] }),
-    ).toEqual(['ring_1'])
+    expect(changedSlots(TWO_HANDED)).toEqual(['weapon', 'offhand'])
+    expect(displaySlots(TWO_HANDED)).toEqual(['weapon', 'offhand'])
+    const ring = { ...TWO_HANDED, kind: 'slot' as const, slot: 'ring_1' as const, changes: [{ slot: 'ring_1' as const, baseId: 'x' }] }
+    expect(changedSlots(ring)).toEqual(['ring_1'])
+    expect(displaySlots(ring)).toEqual(['ring_1'])
+  })
+
+  it('keeps an untouched offhand as equipped (with its affixes) on both sides and opens the picker on the first changed slot', () => {
+    const affixedShield = { ...bare(SHIELD), affixes: [{ affixId: 'a', tier: 1, roll: 1 }] }
+    const weaponOnly: UpgradeSuggestion = { ...TWO_HANDED, kind: 'one_hand_shield', bestBaseId: SWORD, changes: [{ slot: 'weapon', baseId: SWORD }] }
+    const { before, after } = compareInventories({ weapon: { ...bare(GREAT_AXE), stars: 3 }, offhand: affixedShield }, weaponOnly)
+    expect(before.weapon).toEqual(bare(GREAT_AXE))
+    expect(before.offhand).toBe(affixedShield)
+    expect(after.offhand).toBe(affixedShield)
+    expect(after.weapon?.baseId).toBe(SWORD)
+    expect(displaySlots(weaponOnly)).toEqual(['weapon', 'offhand'])
+    const offhandOnly: UpgradeSuggestion = { ...weaponOnly, changes: [{ slot: 'offhand', baseId: SHIELD }] }
+    expect(pickerSlotFor(offhandOnly)).toBe('offhand')
+    expect(pickerSlotFor(weaponOnly)).toBe('weapon')
   })
 })
 

@@ -70,6 +70,7 @@ const ITEMS: Record<string, Partial<ItemBase>> = {
   shield_a: { id: 'shield_a', name: 'Buckler', slot: 'offhand', baseType: 'Shield' },
   shield_b: { id: 'shield_b', name: 'Tower Shield', slot: 'offhand', baseType: 'Shield' },
   dagger_off: { id: 'dagger_off', name: 'Offhand Dagger', slot: 'weapon', baseType: 'Dagger', twoHanded: false },
+  wand_off: { id: 'wand_off', name: 'Offhand Wand', slot: 'weapon', baseType: 'Wand', twoHanded: false },
 }
 function useItemDb() {
   mockGetItem.mockImplementation((id: string) => ITEMS[id] as ItemBase | undefined)
@@ -314,7 +315,12 @@ describe('scanForUpgrades', () => {
           { slot: 'offhand', baseId: 'shield_b' },
         ],
       })
+      // new weapon + new shield is measured against bare weapon + bare current shield (100)
       expect(one?.gainPct).toBeCloseTo(60)
+      const baselineCall = mockRank.mock.calls.find(
+        (c) => c[1] === 'offhand' && c[0].inventory.weapon?.baseId === 'sword_1h' && c[2].length === 1,
+      )
+      expect(baselineCall?.[2]).toEqual(['shield_a'])
       // the 2H call never carried the shield
       const twoHandCall = mockRank.mock.calls.find((c) => c[1] === 'weapon' && c[2].includes('axe_2h'))
       expect(twoHandCall?.[0].inventory.offhand).toBeUndefined()
@@ -336,7 +342,8 @@ describe('scanForUpgrades', () => {
       expect(two?.gainPct).toBeCloseTo(-10)
       expect(one).toMatchObject({ bestBaseId: 'sword_1h_best', offhandBaseName: 'Buckler' })
       expect(one?.changes).toEqual([{ slot: 'weapon', baseId: 'sword_1h_best' }])
-      expect(one?.gainPct).toBeCloseTo(35)
+      // the current shield wins on equal footing, so the gain is the plain weapon swap (130 vs 100)
+      expect(one?.gainPct).toBeCloseTo(30)
     })
 
     it('offers nothing when neither family beats the current weapon by more than the threshold', async () => {
@@ -397,6 +404,42 @@ describe('scanForUpgrades', () => {
         ],
       })
       expect(dual?.gainPct).toBeCloseTo(90)
+    })
+
+    it('leaves offhand-only upgrades to the standalone offhand scan when the equipped one-hander is already best', async () => {
+      mockRank.mockImplementation(async (deps, slot) => {
+        if (slot === 'weapon' && !deps.inventory.offhand) return { axe_2h: 90 }
+        if (slot === 'weapon') return { sword_1h: 100, sword_1h_best: 130 }
+        return { shield_a: 100, shield_b: 150 }
+      })
+      const out = await scanForUpgrades(
+        makeDeps({ inventory: inv({ weapon: 'sword_1h_best', offhand: 'shield_a' }) }),
+      )
+      expect(out.upgrades.filter((s) => s.slot === 'weapon')).toHaveLength(0)
+      const standalone = out.upgrades.find((s) => s.slot === 'offhand')
+      expect(standalone).toMatchObject({ kind: 'slot', bestBaseId: 'shield_b' })
+    })
+
+    it('ranks one-handers without an offhand the store would drop (wand offhand without Master of Wands)', async () => {
+      mockRank.mockImplementation(async (deps, slot) => {
+        if (slot === 'weapon' && !deps.inventory.offhand) return { sword_1h: 100, sword_1h_best: 140, axe_2h: 120 }
+        if (slot === 'weapon') return { sword_1h: 999, sword_1h_best: 999 }
+        return { shield_a: 150, shield_b: 120, dagger_off: 100, wand_off: 100 }
+      })
+      const out = await scanForUpgrades(
+        makeDeps({ inventory: inv({ weapon: 'sword_1h', offhand: 'wand_off' }) }),
+      )
+      // every weapon candidate (and the current base) was ranked with the wand removed
+      const weaponCalls = mockRank.mock.calls.filter((c) => c[1] === 'weapon')
+      expect(weaponCalls.every((c) => c[0].inventory.offhand === undefined)).toBe(true)
+      const one = out.upgrades.find((s) => s.kind === 'one_hand_shield')
+      expect(one).toMatchObject({ bestBaseId: 'sword_1h_best', offhandBaseName: 'Buckler' })
+      // baseline is the bare current weapon with the wand gone (100), pair = best 1H + Buckler (150)
+      expect(one?.gainPct).toBeCloseTo(50)
+      expect(one?.changes).toEqual([
+        { slot: 'weapon', baseId: 'sword_1h_best' },
+        { slot: 'offhand', baseId: 'shield_a' },
+      ])
     })
 
     it('weapon options are not counted against the 5-row cap', async () => {

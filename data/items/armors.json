@@ -1844,10 +1844,7 @@
       ],
       "to_energy": 20,
       "to_vitality": 10,
-      "all_attributes": [
-        30,
-        45
-      ],
+      "all_attributes": 5,
       "mana_replenish_pct": 20,
       "increased_mana": [
         2,
@@ -3565,7 +3562,7 @@
       ],
       "to_dexterity": 10,
       "all_attributes": 5,
-      "faster_hit_recovery": 150,
+      "faster_hit_recovery": 25,
       "all_resistances": 25
     },
     "setId": "traveler",

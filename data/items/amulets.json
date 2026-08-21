@@ -416,7 +416,8 @@
         15,
         25
       ]
-    }
+    },
+    "description": "Also +[2-4]% Total Faster Cast Rate (multiplicative; not modelled)."
   },
   {
     "id": "amulet_satanic_anubis_oculus",

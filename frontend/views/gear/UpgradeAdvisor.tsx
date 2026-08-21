@@ -12,7 +12,7 @@ import { useBuild } from '../../store/build'
 import type { SlotKey } from '../../types'
 
 const ADVISOR_TITLE =
-  'Compares bare item bases via engine DPS: your current base vs the best base for the slot. Weapons get a two-handed and a one-hand + shield option. Click a row to compare side by side and switch.'
+  'Compares bare item bases via engine DPS: your current base vs the best base for the slot. Weapons get a two-handed and a one-hand + shield option (and, when it wins, dual wield). Click an upgrade row to compare side by side and switch.'
 
 const GAIN_PCT_DECIMAL_THRESHOLD = 10
 
@@ -75,7 +75,7 @@ function AdvisorRow({
           'linear-gradient(180deg, var(--color-panel-2), color-mix(in srgb, var(--color-bg) 70%, transparent))',
       }}
     >
-      <span className="w-36 shrink-0 font-mono text-[11px] uppercase tracking-[0.12em] text-muted">
+      <span className="w-44 shrink-0 whitespace-nowrap font-mono text-[11px] uppercase tracking-[0.12em] text-muted">
         {label}
       </span>
       <span className="min-w-0 flex-1 truncate text-[13px] text-text">
@@ -193,7 +193,8 @@ export function UpgradeAdvisor({ onPickSlot }: UpgradeAdvisorProps) {
       {hasSkill && state.phase === 'idle' && (
         <p className="font-mono text-[11px] tracking-[0.04em] text-faint">
           scan compares your bare item bases against the best base per slot — weapons get a
-          two-handed and a one-hand + shield option; click a row to compare and switch
+          two-handed and a one-hand + shield option (dual wield when it wins); click an upgrade
+          row to compare and switch
         </p>
       )}
 
