@@ -31,33 +31,85 @@ pub(crate) fn compute_final_stats(stat_sources: &SourceMap) -> HashMap<String, R
     stats
 }
 
-// life/mana × increased × more; replenishes opt out of floor.
-pub fn apply_multipliers_pass(stats: &mut HashMap<String, Ranged>) {
-    apply_multiplier(stats, "life", Some("increased_life"), Some("increased_life_more"), true);
-    apply_multiplier(stats, "mana", Some("increased_mana"), Some("increased_mana_more"), true);
-    apply_multiplier(
-        stats,
-        "mana_replenish",
-        None,
-        Some("mana_replenish_more"),
-        false,
-    );
-    apply_multiplier(
-        stats,
-        "life_replenish",
-        None,
-        Some("life_replenish_more"),
-        false,
-    );
-    // Ailment durations: (base + flat seconds) × increased%. No floor — the
-    // fraction is visible progress toward the next once-per-second tick.
+// One multiplied-flat stat: flat × (1 + pct) × (1 + more).
+pub(crate) struct MultiplierSpec {
+    pub flat: String,
+    pub pct: Option<String>,
+    pub more: Option<String>,
+    pub floor: bool,
+}
+
+// life/mana × increased × more; replenishes opt out of floor. Ailment
+// durations: (base + flat seconds) × increased%. No floor — the fraction is
+// visible progress toward the next once-per-second tick.
+pub(crate) static MULTIPLIER_SPECS: Lazy<Vec<MultiplierSpec>> = Lazy::new(|| {
+    let spec = |flat: &str, pct: Option<&str>, more: Option<&str>, floor: bool| MultiplierSpec {
+        flat: flat.to_string(),
+        pct: pct.map(str::to_string),
+        more: more.map(str::to_string),
+        floor,
+    };
+    let mut out = vec![
+        spec("life", Some("increased_life"), Some("increased_life_more"), true),
+        spec("mana", Some("increased_mana"), Some("increased_mana_more"), true),
+        spec("mana_replenish", None, Some("mana_replenish_more"), false),
+        spec("life_replenish", None, Some("life_replenish_more"), false),
+    ];
     for a in AILMENT_DURATION_PREFIXES {
-        apply_multiplier(
-            stats,
+        out.push(spec(
             &format!("{a}_duration"),
             Some(&format!("{a}_duration_pct")),
             None,
             false,
+        ));
+    }
+    out
+});
+
+pub fn apply_multipliers_pass(stats: &mut HashMap<String, Ranged>) {
+    for spec in MULTIPLIER_SPECS.iter() {
+        apply_multiplier(
+            stats,
+            &spec.flat,
+            spec.pct.as_deref(),
+            spec.more.as_deref(),
+            spec.floor,
+        );
+    }
+}
+
+// Conversions push new sources after the multiplier pass ran, and the plain
+// re-sum of a touched key drops its multiplier. Rebuild every multiplied stat
+// whose flat or percent key was touched: flat re-summed from sources, then
+// multiplied again with the (possibly re-summed) percent totals in `stats`.
+//
+// Model (planner's choice, pending in-game verification): a conversion reads
+// its source at the fully multiplied value, and what it adds is flat — it joins
+// the target's flat pool and is multiplied by the target's own %increased/%more
+// like any other flat source. suggest_engine::engine::compute_final_state
+// follows the same model so the optimizer and the engine agree.
+pub fn reapply_multipliers_for_touched(
+    stats: &mut HashMap<String, Ranged>,
+    stat_sources: &SourceMap,
+    touched: &HashSet<String>,
+) {
+    for spec in MULTIPLIER_SPECS.iter() {
+        let feeds = touched.contains(&spec.flat)
+            || spec.pct.as_ref().is_some_and(|k| touched.contains(k))
+            || spec.more.as_ref().is_some_and(|k| touched.contains(k));
+        if !feeds {
+            continue;
+        }
+        let Some(list) = stat_sources.get(&spec.flat) else {
+            continue;
+        };
+        stats.insert(spec.flat.clone(), sum_contributions(list));
+        apply_multiplier(
+            stats,
+            &spec.flat,
+            spec.pct.as_deref(),
+            spec.more.as_deref(),
+            spec.floor,
         );
     }
 }

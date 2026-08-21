@@ -495,6 +495,115 @@ fn apply_inventory_implicit_overrides_replace_base_implicits() {
     assert!(in_stats || in_attrs, "override value not found anywhere");
 }
 
+// ---- dual wield: offhand weapon must not stack its base attack rate ----
+
+// Dual wield (Master of Wands / Hercules Grip) puts a weapon in the offhand
+// slot. The planner's model — pending in-game verification — is that only the
+// main-hand weapon defines attacks_per_second (as it alone supplies base
+// attack_speed and the swung base damage); the offhand rate is discarded,
+// not summed, averaged or maxed.
+#[test]
+fn offhand_weapon_does_not_add_its_attacks_per_second() {
+    const MAIN: &str = "sword_satanic_ashbringer";
+    const OFF: &str = "axe_satanic_abomination_s_gut_ripper";
+    let (Some(main), Some(off)) = (data::get_item(MAIN), data::get_item(OFF)) else {
+        eprintln!("{MAIN}/{OFF} missing from data; skipping");
+        return;
+    };
+    let aps_of = |base: &crate::calc::types::ItemBase| -> Ranged {
+        base.implicit
+            .as_ref()
+            .and_then(|m| m.get("attacks_per_second"))
+            .map(|v| v.as_ranged())
+            .expect("weapon must keep its attacks_per_second implicit")
+    };
+    let main_aps = aps_of(main);
+    let off_aps = aps_of(off);
+    assert_eq!(main.slot, "weapon");
+    assert_eq!(off.slot, "weapon");
+    assert_ne!(main_aps, off_aps, "pick weapons with distinct base rates");
+
+    let equip = |id: &str| EquippedItem {
+        base_id: id.to_string(),
+        ..Default::default()
+    };
+    let mut inv: Inventory = HashMap::new();
+    inv.insert("weapon".to_string(), equip(MAIN));
+    inv.insert("offhand".to_string(), equip(OFF));
+    let mut attrs: SourceMap = HashMap::new();
+    let mut stats: SourceMap = HashMap::new();
+    apply_inventory(&inv, &mut attrs, &mut stats);
+
+    let total = sum_contributions(stats.get("attacks_per_second").expect("aps sources"));
+    assert_eq!(total, main_aps, "offhand base attack rate must not stack onto the main hand");
+    // Every other offhand implicit still applies.
+    let other_key = off
+        .implicit
+        .as_ref()
+        .unwrap()
+        .keys()
+        .find(|k| {
+            *k != "attacks_per_second"
+                && stat_def(k).is_some_and(|d| {
+                    d.modifies_attribute.is_none() && !d.item_only.unwrap_or(false)
+                })
+        })
+        .expect("offhand weapon needs another plain implicit");
+    assert!(
+        stats
+            .get(other_key)
+            .is_some_and(|list| list.iter().any(|c| c.label == off.name)),
+        "offhand implicit {other_key} must still be applied"
+    );
+}
+
+// The same guard covers a user-added attacks_per_second override on an
+// offhand whose base has no such implicit (a shield, or a weapon that carries
+// its rate in base.attack_speed): it must not add a second base rate.
+#[test]
+fn offhand_attacks_per_second_override_does_not_add_a_base_rate() {
+    let main = data::data().items.values().find(|b| {
+        b.slot == "weapon"
+            && b.implicit.as_ref().is_some_and(|m| m.contains_key("attacks_per_second"))
+    });
+    let off = data::data().items.values().find(|b| {
+        b.slot == "offhand"
+            && !b.implicit.as_ref().is_some_and(|m| m.contains_key("attacks_per_second"))
+    });
+    let (Some(main), Some(off)) = (main, off) else {
+        eprintln!("no main-hand weapon / offhand without aps implicit in data; skipping");
+        return;
+    };
+    let main_aps = main.implicit.as_ref().unwrap()["attacks_per_second"].as_ranged();
+
+    let mut inv: Inventory = HashMap::new();
+    inv.insert(
+        "weapon".to_string(),
+        EquippedItem {
+            base_id: main.id.clone(),
+            ..Default::default()
+        },
+    );
+    inv.insert(
+        "offhand".to_string(),
+        EquippedItem {
+            base_id: off.id.clone(),
+            implicit_overrides: HashMap::from([("attacks_per_second".to_string(), 9.0)]),
+            ..Default::default()
+        },
+    );
+    let mut attrs: SourceMap = HashMap::new();
+    let mut stats: SourceMap = HashMap::new();
+    apply_inventory(&inv, &mut attrs, &mut stats);
+
+    let aps = stats.get("attacks_per_second").expect("aps sources");
+    assert!(
+        aps.iter().all(|c| c.label != off.name),
+        "offhand override must not contribute attacks_per_second: {aps:?}"
+    );
+    assert_eq!(sum_contributions(aps), main_aps);
+}
+
 // ---- charm star scaling gated by season ----
 
 // A charm's percent-star-scaling implicit must star-scale under s10 but stay

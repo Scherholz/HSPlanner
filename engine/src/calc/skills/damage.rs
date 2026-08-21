@@ -276,10 +276,17 @@ pub fn compute_skill_damage(input: &SkillInput<'_>) -> Option<SkillDamageBreakdo
         (val(eff_min, false), val(eff_max, true))
     };
 
-    let mut flat_min = 0.0;
-    let mut flat_max = 0.0;
-    for k in ["flat_skill_damage", "flat_elemental_skill_damage"] {
-        let v = rg(input.stats, k);
+    let is_elemental = s
+        .damage_type
+        .as_deref()
+        .is_some_and(|dt| ELEMENTS.contains(&dt));
+
+    let flat_all = rg(input.stats, "flat_skill_damage");
+    let mut flat_min = r_min(flat_all);
+    let mut flat_max = r_max(flat_all);
+    // "+X Elemental Skill Damage" skips physical/magic hits.
+    if is_elemental {
+        let v = rg(input.stats, "flat_elemental_skill_damage");
         flat_min += r_min(v);
         flat_max += r_max(v);
     }
@@ -347,10 +354,6 @@ pub fn compute_skill_damage(input: &SkillInput<'_>) -> Option<SkillDamageBreakdo
     let eff_res_pct = enemy_res_pct * (1.0 - ignore_res_pct / 100.0);
     let resistance_mult = 1.0 - eff_res_pct / 100.0;
 
-    let is_elemental = s
-        .damage_type
-        .as_deref()
-        .is_some_and(|dt| ELEMENTS.contains(&dt));
     let elemental_break_pct = if is_elemental {
         let base = r_max(rg(input.stats, "elemental_break"));
         let on = if is_spell {
@@ -573,6 +576,29 @@ mod tests {
 
     fn cond(active: &[&str]) -> ConditionMap {
         active.iter().map(|c| (c.to_string(), true)).collect()
+    }
+
+    #[test]
+    fn flat_elemental_skill_damage_skips_physical_skills() {
+        let flat = stats(&[("flat_elemental_skill_damage", 50.0)]);
+        let physical = breakdown(&Case {
+            damage_type: "physical",
+            stats: flat.clone(),
+            ..Default::default()
+        });
+        assert_eq!(physical.hit_max, 100, "physical hit must ignore elemental flat");
+        let lightning = breakdown(&Case {
+            stats: flat,
+            ..Default::default()
+        });
+        assert_eq!(lightning.hit_max, 150);
+        // Plain flat skill damage still reaches the physical hit.
+        let generic = breakdown(&Case {
+            damage_type: "physical",
+            stats: stats(&[("flat_skill_damage", 50.0)]),
+            ..Default::default()
+        });
+        assert_eq!(generic.hit_max, 150);
     }
 
     #[test]

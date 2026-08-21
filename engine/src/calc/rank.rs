@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use super::affix::apply_stars_to_ranged_value;
-use super::data::is_gear_slot;
+use super::data::can_star_forge;
 use super::skills::{ItemSkillBonuses, Ranged, Skill, StatMap, r_max, r_min, rg};
 use super::types::{Inventory, ItemBase};
 
@@ -65,6 +65,9 @@ pub fn aggregate_item_skill_bonuses(
     items: &HashMap<String, ItemBase>,
 ) -> HashMap<String, Ranged> {
     let mut out: HashMap<String, Ranged> = HashMap::new();
+    // Same season-aware gate the inventory implicit/affix pass uses, so S10
+    // charm skillBonuses star-scale exactly like their other lines.
+    let season = super::season::current_season_id();
     for (slot_key, item) in inventory {
         let Some(base) = items.get(&item.base_id) else {
             continue;
@@ -72,7 +75,7 @@ pub fn aggregate_item_skill_bonuses(
         let Some(skill_bonuses) = base.skill_bonuses.as_ref() else {
             continue;
         };
-        let stars = if is_gear_slot(slot_key) {
+        let stars = if can_star_forge(slot_key, &season) {
             item.stars
         } else {
             None
@@ -332,6 +335,25 @@ mod tests {
         inv.insert("relic".into(), equipped("relic_x", Some(5)));
         let out = aggregate_item_skill_bonuses(&inv, &db);
         assert_eq!(out.get("fireball"), Some(&(1.0, 1.0)));
+    }
+
+    #[test]
+    fn aggregate_charm_stars_follow_the_season_gate() {
+        // Charms can't be star-forged in s9 but can from s10 on; the same
+        // 4-star staircase as gear applies once the gate opens.
+        let mut db: HashMap<String, ItemBase> = HashMap::new();
+        db.insert(
+            "charm_x".into(),
+            item_base("charm_x", "charm_1", &[("Fireball", (1.0, 1.0))]),
+        );
+        let mut inv: Inventory = HashMap::new();
+        inv.insert("charm_1".into(), equipped("charm_x", Some(4)));
+        let fireball = |season: &str| {
+            let _s = crate::calc::season::SeasonScope::enter(Some(season.to_string()));
+            aggregate_item_skill_bonuses(&inv, &db).get("fireball").copied()
+        };
+        assert_eq!(fireball("s9"), Some((1.0, 1.0)));
+        assert_eq!(fireball("s10"), Some((3.0, 3.0)));
     }
 
     #[test]

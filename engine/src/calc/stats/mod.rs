@@ -314,6 +314,19 @@ pub fn compute_build_stats_core(input: &BuildStatsInput) -> ComputedStats {
         }
     }
 
+    // 7d. Item-granted skill bonuses → passive stats; ranks reused in step 19.
+    // Runs before step 8 so a granted +all_skills / +{element}_skills source
+    // counts toward class passive ranks, and before the attribute passes so
+    // granted to_strength/to_vitality reach the attribute totals and the
+    // per-attribute stats they feed.
+    let item_granted_ranks = apply_item_granted_passive_stats(
+        input.inventory,
+        input.granted_skill_ranks,
+        input.player_conditions,
+        &mut attr_sources,
+        &mut stat_sources,
+    );
+
     // 8. Skill ranks → passive stats
     apply_skill_ranks(
         input.class_id,
@@ -350,15 +363,6 @@ pub fn compute_build_stats_core(input: &BuildStatsInput) -> ComputedStats {
     // 14. Attribute-divided stats (e.g. vitality/8 → life_replenish)
     apply_attribute_divided_stats(&attributes, &mut stat_sources);
 
-    // 15. Item-granted skill bonuses → passive stats; ranks reused in step 19.
-    let item_granted_ranks = apply_item_granted_passive_stats(
-        input.inventory,
-        input.granted_skill_ranks,
-        input.player_conditions,
-        &mut attr_sources,
-        &mut stat_sources,
-    );
-
     // 16. Stat fan-outs (all_resistances → per-element variants)
     apply_stat_fan_outs(&mut stat_sources);
 
@@ -389,11 +393,16 @@ pub fn compute_build_stats_core(input: &BuildStatsInput) -> ComputedStats {
     );
 
     // 21. Re-sum touched stat keys after conversions injected new sources.
-    for k in touched_item.iter().chain(touched_tree.iter()) {
+    let touched: HashSet<String> = touched_item.into_iter().chain(touched_tree).collect();
+    for k in touched.iter() {
         if let Some(list) = stat_sources.get(k) {
             stats.insert(k.clone(), sum_contributions(list));
         }
     }
+
+    // 21b. The plain re-sum dropped the multiplier on life/mana-style keys
+    // (flat × increased × more); rebuild those from sources + percent totals.
+    reapply_multipliers_for_touched(&mut stats, &stat_sources, &touched);
 
     // 22. Tree disables (zero out life_replenish if flagged)
     apply_tree_disables(&tree_agg.disables, &mut stats);

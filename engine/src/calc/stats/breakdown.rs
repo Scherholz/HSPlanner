@@ -43,23 +43,14 @@ pub struct StatBreakdown {
 }
 
 // For multiplied-flat stats the percent multipliers live under different
-// keys than the flat base; mirror apply_multipliers_pass calls.
+// keys than the flat base; derived from MULTIPLIER_SPECS so the breakdown
+// can't drift from apply_multipliers_pass.
 pub(crate) fn multiplier_keys_for(stat_key: &str) -> (Option<&'static str>, Option<&'static str>) {
-    match stat_key {
-        "life" => (Some("increased_life"), Some("increased_life_more")),
-        "mana" => (Some("increased_mana"), Some("increased_mana_more")),
-        "mana_replenish" => (None, Some("mana_replenish_more")),
-        "life_replenish" => (None, Some("life_replenish_more")),
-        "bleed_duration" => (Some("bleed_duration_pct"), None),
-        "burning_duration" => (Some("burning_duration_pct"), None),
-        "frostbite_duration" => (Some("frostbite_duration_pct"), None),
-        "permafrost_duration" => (Some("permafrost_duration_pct"), None),
-        "poisoned_duration" => (Some("poisoned_duration_pct"), None),
-        "rabies_duration" => (Some("rabies_duration_pct"), None),
-        "shadowburn_duration" => (Some("shadowburn_duration_pct"), None),
-        "stasis_duration" => (Some("stasis_duration_pct"), None),
-        _ => (None, None),
-    }
+    MULTIPLIER_SPECS
+        .iter()
+        .find(|spec| spec.flat == stat_key)
+        .map(|spec| (spec.pct.as_deref(), spec.more.as_deref()))
+        .unwrap_or((None, None))
 }
 
 // `_more` → "Total X"; falls back to raw key when no def.

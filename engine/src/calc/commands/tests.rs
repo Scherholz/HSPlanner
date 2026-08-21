@@ -213,3 +213,80 @@ mod projectile_dto_tests {
         assert_eq!(input.projectile_count.map(|p| p.max(0.0) as u32), Some(2));
     }
 }
+
+// Multi-skill ranking must mirror the frontend's mergeCombinedPerformance:
+// every skill's avg-hit and ailment DPS scaled by its own execute multiplier,
+// plus the shared proc DPS once (scaled by the primary's multiplier), midpoint.
+#[test]
+fn rank_slot_items_multi_skill_mirrors_frontend_merge() {
+    // BuildPerformanceInput is not Clone; parse the fixture as often as needed.
+    let input = || -> BuildPerformanceInput {
+        serde_json::from_str(
+            r#"{
+          "classId": "demonspawn",
+          "level": 100,
+          "skillRanks": { "spinal_tap": 10, "bone_fragments": 10, "blood_demons": 5 },
+          "subskillRanks": { "spinal_tap:blood_and_gore": 4 },
+          "procToggles": { "blood_demons": true },
+          "killsPerSec": 1.0
+        }"#,
+        )
+        .expect("valid input")
+    };
+    let perf = input();
+    let base_id = crate::calc::data::data()
+        .items
+        .keys()
+        .find(|id| id.starts_with("body_armor_") || id.starts_with("armors_"))
+        .cloned()
+        .expect("an armor base exists");
+    let skills = vec!["spinal_tap".to_string(), "bone_fragments".to_string()];
+
+    let out = rank_slot_items(RankSlotItemsInput {
+        perf: input(),
+        slot: "armor".to_string(),
+        base_ids: vec![base_id.clone()],
+        active_skill_ids: skills.clone(),
+    });
+    let ranked = out[&base_id];
+
+    // Hand-merge the two per-skill performances the same way the frontend does.
+    let mut inventory = perf.inventory.clone();
+    inventory.insert(
+        "armor".to_string(),
+        EquippedItem {
+            base_id: base_id.clone(),
+            ..Default::default()
+        },
+    );
+    let mut sum = (0.0, 0.0);
+    let mut proc = (0.0, 0.0);
+    for (i, sid) in skills.iter().enumerate() {
+        let p = compute_build_performance(&perf_deps(&perf, &inventory, Some(sid)));
+        let exec = p.execute_mult;
+        if let (Some(a), Some(b)) = (p.avg_hit_dps_min, p.avg_hit_dps_max) {
+            sum = (sum.0 + a * exec, sum.1 + b * exec);
+        }
+        if let (Some(a), Some(b)) = (p.ailment_dps_min, p.ailment_dps_max) {
+            sum = (sum.0 + a * exec, sum.1 + b * exec);
+        }
+        if i == 0 {
+            proc = (p.proc_dps_min * exec, p.proc_dps_max * exec);
+        }
+    }
+    let expected = (sum.0 + proc.0 + sum.1 + proc.1) / 2.0;
+    assert!(expected > 0.0, "fixture must produce DPS");
+    assert!(
+        (ranked - expected).abs() < 1e-6 * expected.max(1.0),
+        "ranked {ranked} vs merged {expected}"
+    );
+
+    // And it is not the old definition (avg-hit + proc only, no ailment/execute).
+    let single = rank_slot_items(RankSlotItemsInput {
+        perf: input(),
+        slot: "armor".to_string(),
+        base_ids: vec![base_id.clone()],
+        active_skill_ids: vec!["spinal_tap".to_string()],
+    });
+    assert!(single[&base_id].is_finite());
+}

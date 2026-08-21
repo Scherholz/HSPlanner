@@ -3,9 +3,10 @@ use std::collections::HashMap;
 use super::{
     AttackSkillDamageBreakdown, AttrMap, CRUSHING_BLOW_DEFAULT, ConditionMap, DamageFormula,
     ItemSkillBonuses, Skill, SkillDamageBreakdown, SkillRanks, StatMap, Weapon,
-    collect_extra_damage, crit_factors, damage::bonus_source_synergy_pct, damage::element_keys,
-    deadly_blow_mult, r_max, r_min, rg,
+    collect_extra_damage, crit_factors, damage::bonus_source_synergy_pct, deadly_blow_mult,
+    r_max, r_min, rg,
 };
+use crate::calc::rank::effective_rank_range_for;
 
 pub struct AttackSkillInput<'a> {
     pub skill: &'a Skill,
@@ -48,20 +49,14 @@ pub fn compute_attack_skill_damage(
     }
     let scaling = s.attack_scaling.as_ref()?;
 
-    let all_skills = rg(input.stats, "all_skills");
-    let elem_bonus = s
-        .damage_type
-        .as_deref()
-        .and_then(element_keys)
-        .map(|k| rg(input.stats, k.skills))
-        .unwrap_or((0.0, 0.0));
-    let item = input
-        .item_skill_bonuses
-        .get(&s.name)
-        .copied()
-        .unwrap_or((0.0, 0.0));
-    let eff_min = input.allocated_rank + r_min(all_skills) + r_min(elem_bonus) + item.0;
-    let eff_max = input.allocated_rank + r_max(all_skills) + r_max(elem_bonus) + item.1;
+    // Same rank the spell path and the UI use: all_skills + element + tag
+    // skills (projectile/sentry/...) + item-granted.
+    let (eff_min, eff_max) = effective_rank_range_for(
+        s,
+        input.allocated_rank,
+        input.stats,
+        input.item_skill_bonuses,
+    );
 
     let skill_wdp_min = formula_at_clamped_opt(scaling.weapon_damage_pct.as_ref(), eff_min);
     let skill_wdp_max = formula_at_clamped_opt(scaling.weapon_damage_pct.as_ref(), eff_max);
@@ -299,6 +294,28 @@ mod tests {
             conversion_flat,
         )
         .combined_hit_max
+    }
+
+    #[test]
+    fn tag_skill_ranks_raise_the_attack_skill_effective_rank() {
+        // "+3 to Projectile Skills" counts for a Projectile-tagged attack and
+        // scales its weapon damage % like any other rank source.
+        let mut s = skill();
+        s.tags = vec!["Attack".into(), "Projectile".into()];
+        s.attack_scaling = Some(AttackSkillScaling {
+            weapon_damage_pct: Some(DamageFormula {
+                base: 100.0,
+                per_level: 10.0,
+            }),
+            ..Default::default()
+        });
+        let shared = stats(&[("projectile_skills", 3.0)]);
+        let out = breakdown_for(&s, &shared, &StatMap::new(), &SkillRanks::new(), 1, 0.0);
+        assert_eq!((out.effective_rank_min, out.effective_rank_max), (4.0, 4.0));
+        assert_eq!(out.weapon_damage_pct_max, 140.0);
+        // A skill without the tag keeps its bare rank.
+        let plain = breakdown_for(&skill(), &shared, &StatMap::new(), &SkillRanks::new(), 1, 0.0);
+        assert_eq!((plain.effective_rank_min, plain.effective_rank_max), (1.0, 1.0));
     }
 
     #[test]

@@ -68,8 +68,18 @@ pub fn apply_inventory(
             }
         }
 
+        // Dual wield policy (planner model, pending in-game verification): the
+        // main-hand weapon alone defines the base attack rate, matching the
+        // main-hand-only `base.attack_speed` below and the main-hand Weapon the
+        // attack panel swings. An offhand weapon's own rate must not stack onto
+        // it, whether it comes from base.implicit or a user override.
+        let skip_offhand_aps = |k: &str| slot_key == "offhand" && k == "attacks_per_second";
+
         if let Some(implicit) = base.implicit.as_ref() {
             for (stat_key, value) in implicit.iter() {
+                if skip_offhand_aps(stat_key) {
+                    continue;
+                }
                 let override_val = item.implicit_overrides.get(stat_key).copied();
                 let scaled: Ranged = match override_val {
                     Some(ov) => (ov, ov),
@@ -99,7 +109,7 @@ pub fn apply_inventory(
                     continue;
                 }
             }
-            if stat_key == "enhanced_defense" {
+            if stat_key == "enhanced_defense" || skip_offhand_aps(stat_key) {
                 continue;
             }
             apply_contribution(

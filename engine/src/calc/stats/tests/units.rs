@@ -284,6 +284,53 @@ fn multipliers_pass_scales_ailment_durations() {
     assert_eq!(stats.get("stasis_duration"), Some(&(5.0, 5.0)));
 }
 
+// A conversion that lands on the percent key (e.g. "X% of Attack Damage ->
+// Increased Life") touches only `increased_life`; the pass must still rebuild
+// life as floor(sum(life sources) x (1 + increased_life/100)).
+#[test]
+fn reapply_multipliers_for_touched_rebuilds_life_when_only_increased_life_touched() {
+    let mut sources: SourceMap = HashMap::new();
+    sources.insert("life".to_string(), vec![contrib((100.0, 100.0)), contrib((50.0, 50.0))]);
+    sources.insert(
+        "increased_life".to_string(),
+        vec![contrib((50.0, 50.0)), contrib((50.0, 50.0))],
+    );
+    sources.insert("mana".to_string(), vec![contrib((40.0, 40.0))]);
+    sources.insert("increased_mana".to_string(), vec![contrib((100.0, 100.0))]);
+
+    // State after the multiplier pass ran with increased_life = 50 (the second
+    // +50 source arrived later via a conversion) and the touched key re-summed.
+    let mut stats: HashMap<String, Ranged> = HashMap::new();
+    stats.insert("life".to_string(), (225.0, 225.0));
+    stats.insert("increased_life".to_string(), (100.0, 100.0));
+    stats.insert("mana".to_string(), (80.0, 80.0));
+    stats.insert("increased_mana".to_string(), (100.0, 100.0));
+
+    let touched: HashSet<String> = ["increased_life".to_string()].into_iter().collect();
+    reapply_multipliers_for_touched(&mut stats, &sources, &touched);
+
+    // floor(150 x (1 + 100/100)) = 300
+    assert_eq!(stats.get("life").copied(), Some((300.0, 300.0)));
+    // Untouched multiplied stats keep their already-multiplied value.
+    assert_eq!(stats.get("mana").copied(), Some((80.0, 80.0)));
+}
+
+// The per-stat breakdown must expose exactly the percent/more keys the
+// multiplier pass applies, for every spec in the table.
+#[test]
+fn breakdown_multiplier_keys_match_multiplier_specs() {
+    assert!(!MULTIPLIER_SPECS.is_empty());
+    for spec in MULTIPLIER_SPECS.iter() {
+        assert_eq!(
+            multiplier_keys_for(&spec.flat),
+            (spec.pct.as_deref(), spec.more.as_deref()),
+            "breakdown keys drifted for {}",
+            spec.flat
+        );
+    }
+    assert_eq!(multiplier_keys_for("enhanced_damage"), (None, None));
+}
+
 // ---- STAT_FAN_OUTS ----
 
 #[test]

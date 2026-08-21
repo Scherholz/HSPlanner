@@ -244,11 +244,16 @@ fn push_mod(out: &mut TreeAggregateResult, parsed: ParsedMod) {
         .insert(target_key, ranged_add(cur, value));
 }
 
+// Attribute targets are added in place (later conversions see them); stat
+// targets are returned as flat additions for the caller to merge, reading
+// every stat source from the pre-conversion `stats` snapshot — same as
+// calc::stats::finalize::apply_tree_conversions.
 pub fn apply_tree_conversions(
     attrs: &mut AttrMap,
-    stats: &mut StatMap,
+    stats: &StatMap,
     conversions: &[ParsedConversion],
-) {
+) -> StatMap {
+    let mut additions: StatMap = HashMap::new();
     for conv in conversions {
         let source_val = match conv.from_kind {
             ConvertKind::Attribute => attrs.get(&conv.from_key).copied().unwrap_or((0.0, 0.0)),
@@ -269,11 +274,12 @@ pub fn apply_tree_conversions(
                 attrs.insert(conv.to_key.clone(), ranged_add(cur, contribution));
             }
             ConvertKind::Stat => {
-                let cur = stats.get(&conv.to_key).copied().unwrap_or((0.0, 0.0));
-                stats.insert(conv.to_key.clone(), ranged_add(cur, contribution));
+                let cur = additions.get(&conv.to_key).copied().unwrap_or((0.0, 0.0));
+                additions.insert(conv.to_key.clone(), ranged_add(cur, contribution));
             }
         }
     }
+    additions
 }
 
 pub fn apply_disables(stats: &mut StatMap, disables: &HashSet<String>) {
