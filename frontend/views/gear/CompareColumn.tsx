@@ -10,7 +10,7 @@ import {
 } from './lib/diff'
 import { RARITY_TEXT } from './lib/rarity'
 
-function VerdictBadge({ verdict }: { verdict: Verdict }) {
+export function VerdictBadge({ verdict }: { verdict: Verdict }) {
   const config: Record<
     Verdict,
     { label: string; arrow: string; cls: string }
@@ -96,7 +96,7 @@ function DiffRow({ diff }: { diff: StatDiff }) {
   )
 }
 
-function DiffSection({
+export function DiffSection({
   title,
   diffs,
   emptyHint,
@@ -126,7 +126,7 @@ function DiffSection({
   )
 }
 
-function CompareSummary({
+export function CompareSummary({
   before,
   after,
 }: {

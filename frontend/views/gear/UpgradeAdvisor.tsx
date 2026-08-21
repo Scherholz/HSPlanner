@@ -1,22 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   scanForUpgrades,
+  type UpgradeChange,
   type UpgradeScanResult,
+  type UpgradeSuggestion,
 } from './lib/upgradeAdvisor'
+import { makeEquippedItem } from './lib/itemEdits'
+import { UpgradeCompareModal } from './UpgradeCompareModal'
 import { useBuildPerformanceDeps } from '../../hooks/useBuildPerformanceDeps'
+import { useBuild } from '../../store/build'
 import type { SlotKey } from '../../types'
 
 const ADVISOR_TITLE =
-  'Compares bare item bases via engine DPS: your current base vs the best base for the slot. Move affixes separately.'
+  'Compares bare item bases via engine DPS: your current base vs the best base for the slot. Weapons get a two-handed and a one-hand + shield option. Click a row to compare side by side and switch.'
 
 const GAIN_PCT_DECIMAL_THRESHOLD = 10
 
 function formatGainPct(gainPct: number): string {
-  const value =
-    gainPct < GAIN_PCT_DECIMAL_THRESHOLD
-      ? gainPct.toFixed(1)
-      : Math.round(gainPct).toString()
-  return `+${value}%`
+  const abs = Math.abs(gainPct)
+  const value = abs < GAIN_PCT_DECIMAL_THRESHOLD ? abs.toFixed(1) : Math.round(abs).toString()
+  return `${gainPct < 0 ? '−' : '+'}${value}%`
 }
 
 const EMPTY_SLOTS_PREVIEW_COUNT = 3
@@ -31,6 +34,19 @@ function formatEmptySlotNames(
   return remaining > 0
     ? `${names.join(', ')}, +${remaining} more`
     : names.join(', ')
+}
+
+function suggestionLabel(s: UpgradeSuggestion): string {
+  if (s.kind === 'two_handed') return `${s.slotName} · 2H`
+  if (s.kind === 'one_hand_shield') return `${s.slotName} · 1H + shield`
+  return s.slotName
+}
+
+function suggestionDetail(s: UpgradeSuggestion): string {
+  const target = s.offhandBaseName
+    ? `${s.bestBaseName} + ${s.offhandBaseName}`
+    : s.bestBaseName
+  return `${s.currentBaseName} → ${target}`
 }
 
 interface AdvisorRowProps {
@@ -58,7 +74,7 @@ function AdvisorRow({
           'linear-gradient(180deg, var(--color-panel-2), color-mix(in srgb, var(--color-bg) 70%, transparent))',
       }}
     >
-      <span className="w-28 shrink-0 font-mono text-[11px] uppercase tracking-[0.12em] text-muted">
+      <span className="w-36 shrink-0 font-mono text-[11px] uppercase tracking-[0.12em] text-muted">
         {label}
       </span>
       <span className="min-w-0 flex-1 truncate text-[13px] text-text">
@@ -85,7 +101,9 @@ type ScanState =
 
 export function UpgradeAdvisor({ onPickSlot }: UpgradeAdvisorProps) {
   const deps = useBuildPerformanceDeps()
+  const commitEquippedItem = useBuild((s) => s.commitEquippedItem)
   const [state, setState] = useState<ScanState>({ phase: 'idle' })
+  const [compare, setCompare] = useState<UpgradeSuggestion | null>(null)
   const epochRef = useRef(0)
   const hasSkill = deps.activeSkillIds.length > 0
 
@@ -93,6 +111,7 @@ export function UpgradeAdvisor({ onPickSlot }: UpgradeAdvisorProps) {
     epochRef.current += 1
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setState({ phase: 'idle' })
+    setCompare(null)
   }, [deps])
 
   const startScan = async () => {
@@ -107,6 +126,18 @@ export function UpgradeAdvisor({ onPickSlot }: UpgradeAdvisorProps) {
     } catch {
       if (epochRef.current === epoch) setState({ phase: 'error' })
     }
+  }
+
+  const applyChanges = (changes: UpgradeChange[]) => {
+    for (const c of changes) {
+      if (c.baseId === null) {
+        commitEquippedItem(c.slot, null)
+        continue
+      }
+      const item = makeEquippedItem(c.baseId)
+      if (item) commitEquippedItem(c.slot, item)
+    }
+    setCompare(null)
   }
 
   const isEmpty =
@@ -160,7 +191,8 @@ export function UpgradeAdvisor({ onPickSlot }: UpgradeAdvisorProps) {
 
       {hasSkill && state.phase === 'idle' && (
         <p className="font-mono text-[11px] tracking-[0.04em] text-faint">
-          scan compares your bare item bases against the best base per slot
+          scan compares your bare item bases against the best base per slot — weapons get a
+          two-handed and a one-hand + shield option; click a row to compare and switch
         </p>
       )}
 
@@ -193,17 +225,30 @@ export function UpgradeAdvisor({ onPickSlot }: UpgradeAdvisorProps) {
             </li>
           )}
           {state.result.upgrades.map((s) => (
-            <li key={s.slot}>
+            <li key={`${s.slot}:${s.kind}`}>
               <AdvisorRow
-                label={s.slotName}
-                detail={`${s.currentBaseName} → ${s.bestBaseName}`}
+                label={suggestionLabel(s)}
+                detail={suggestionDetail(s)}
                 value={formatGainPct(s.gainPct)}
-                valueClassName="text-accent-hot"
-                onClick={() => onPickSlot(s.slot)}
+                valueClassName={s.gainPct > 0 ? 'text-accent-hot' : 'text-muted'}
+                onClick={() => setCompare(s)}
               />
             </li>
           ))}
         </ul>
+      )}
+
+      {compare && (
+        <UpgradeCompareModal
+          suggestion={compare}
+          deps={deps}
+          onSwitch={applyChanges}
+          onPickSlot={(slot) => {
+            setCompare(null)
+            onPickSlot(slot)
+          }}
+          onClose={() => setCompare(null)}
+        />
       )}
     </section>
   )
