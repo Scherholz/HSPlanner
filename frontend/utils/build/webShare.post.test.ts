@@ -4,6 +4,10 @@ import { SHARE_PAYLOAD_FIXTURE } from './sharePayload.fixture'
 const fetchMock = vi.fn()
 vi.stubGlobal('fetch', fetchMock)
 
+// The first dynamic import of ./webShare pulls the whole data module; under a
+// parallel full-suite run that alone can take >20s on a busy machine.
+const SLOW_IMPORT_MS = 60_000
+
 describe('postWebShare', () => {
   beforeEach(() => {
     fetchMock.mockReset()
@@ -25,14 +29,18 @@ describe('postWebShare', () => {
         expect.objectContaining({ method: 'POST' }),
       )
     },
-    20000,
+    SLOW_IMPORT_MS,
   )
 
-  it('throws a validation WebShareError on 400', async () => {
-    fetchMock.mockResolvedValue({ status: 400, json: async () => ({ error: 'invalid_payload' }) })
-    const { postWebShare, WebShareError } = await import('./webShare')
-    await expect(postWebShare(SHARE_PAYLOAD_FIXTURE)).rejects.toThrow(WebShareError)
-  })
+  it(
+    'throws a validation WebShareError on 400',
+    async () => {
+      fetchMock.mockResolvedValue({ status: 400, json: async () => ({ error: 'invalid_payload' }) })
+      const { postWebShare, WebShareError } = await import('./webShare')
+      await expect(postWebShare(SHARE_PAYLOAD_FIXTURE)).rejects.toThrow(WebShareError)
+    },
+    SLOW_IMPORT_MS,
+  )
 
   it('throws a too-large WebShareError on 413', async () => {
     fetchMock.mockResolvedValue({ status: 413, json: async () => ({ error: 'snapshot_too_large' }) })
