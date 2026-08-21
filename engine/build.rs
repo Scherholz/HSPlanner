@@ -5,6 +5,11 @@ use std::path::{Path, PathBuf};
 fn main() {
     // Lib tests need no tauri artifacts; skipping lets `cargo test --lib` run
     // while a concurrent `tauri dev` owns the generated files.
+    // The skip must re-run this script when the variable flips back: cargo
+    // otherwise reuses the skipped output (no embedded manifest/resources) for
+    // the next normal build and the exe fails to load (STATUS_ENTRYPOINT_NOT_FOUND,
+    // comctl32 v5 lacks TaskDialogIndirect).
+    println!("cargo:rerun-if-env-changed=HSP_SKIP_TAURI_BUILD");
     if env::var_os("HSP_SKIP_TAURI_BUILD").is_none() {
         tauri_build::build();
     }
